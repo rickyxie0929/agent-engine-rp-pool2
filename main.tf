@@ -73,3 +73,23 @@ data "http" "prewarmed_init_dry_run" {
     google_service_account_iam_member.cloudrun_p4sa_token_creator
   ]
 }
+
+# ---------------------------------------------------------------------------------
+# Step 4: Creating the Memory bank service account for this tenant project
+# ---------------------------------------------------------------------------------
+resource "google_service_account" "memory_bank_sa" {
+  account_id   = "memory-bank"
+  project      = var.tenant_project_id
+  display_name = "Memory Bank Service Account"
+}
+
+# ---------------------------------------------------------------------------------
+# Step 5: granting the AE control plane the borg role roken creator role on the memory bank SA. 
+# Note: in real world we will be sending the control plane borg service account based on the environment(autopush, staging, prod). 
+# For now we will be using the projects/kshalu-org-1/serviceAccounts/generic-vertex-sa@kshalu-org-1.iam.gserviceaccount.com for this purpose
+# ---------------------------------------------------------------------------------
+resource "google_service_account_iam_member" "ae_control_plane_token_creator" {
+  service_account_id = google_service_account.memory_bank_sa.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:generic-vertex-sa@kshalu-org-1.iam.gserviceaccount.com"
+}
