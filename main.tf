@@ -20,14 +20,14 @@ resource "google_project_service_identity" "cloudrun_sa" {
 # Grants the Cloud Run Service Agent permission to generate tokens for the Vertex P4SA
 # ---------------------------------------------------------------------------------
 resource "google_service_account_iam_member" "cloudrun_p4sa_token_creator" {
-  # The Resource: A generic SA in the producer project (ez-agentengine-autopush)
-  # Ensure this SA is created in the producer project before running!
-  service_account_id = "projects/ez-agentengine-autopush/serviceAccounts/generic-vertex-sa-poc@ez-agentengine-autopush.iam.gserviceaccount.com"
-  
-  role               = "roles/iam.serviceAccountTokenCreator"
-  
-  # The Member: The Cloud Run Service Agent for the Tenant Project
-  member             = "serviceAccount:${google_project_service_identity.cloudrun_sa.email}"
+  # The producer-side runtime SA whose IAM policy we're updating. Lives in
+  # `producer_project_id` (env-specific). Ensure this SA is created in the
+  # producer project before this apply runs.
+  service_account_id = "projects/${var.producer_project_id}/serviceAccounts/${var.runtime_service_account_email}"
+
+  role   = "roles/iam.serviceAccountTokenCreator"
+  # The Member: The Cloud Run Service Agent for the tenant project
+  member = "serviceAccount:${google_project_service_identity.cloudrun_sa.email}"
 }
 
 # ---------------------------------------------------------------------------------
@@ -42,12 +42,11 @@ resource "google_service_account" "memory_bank_sa" {
 # ---------------------------------------------------------------------------------
 # 4. granting the AE control plane the borg role roken creator role on the memory bank SA. 
 # Note: in real world we will be sending the control plane borg service account based on the environment(autopush, staging, prod). 
-# For now we will be using the projects/ez-agentengine-autopush/serviceAccounts/generic-vertex-sa-poc@ez-agentengine-autopush.iam.gserviceaccount.com for this purpose
 # ---------------------------------------------------------------------------------
 resource "google_service_account_iam_member" "ae_control_plane_token_creator" {
   service_account_id = google_service_account.memory_bank_sa.name
   role               = "roles/iam.serviceAccountTokenCreator"
-  member             = "serviceAccount:generic-vertex-sa-poc@ez-agentengine-autopush.iam.gserviceaccount.com"
+  member             = "serviceAccount:${var.runtime_service_account_email}"
 
   depends_on = [google_service_account.memory_bank_sa]
 }
@@ -79,7 +78,7 @@ data "http" "prewarmed_init_dry_run" {
     }
 
     template = {
-      serviceAccount = "generic-vertex-sa-poc@ez-agentengine-autopush.iam.gserviceaccount.com"
+      serviceAccount = var.runtime_service_account_email
       
       containers = [
         {
