@@ -1,7 +1,3 @@
-locals {
-  runtime_sa_email = "service-${var.tenant_project_number}@gcp-sa-aiplatform.iam.gserviceaccount.com"
-}
-
 resource "google_project_service" "cloudrun" {
   project            = var.tenant_project_id
   service            = "run.googleapis.com"
@@ -15,16 +11,17 @@ resource "google_project_service_identity" "cloudrun_sa" {
   depends_on = [google_project_service.cloudrun]
 }
 
-resource "google_service_account_iam_member" "cloudrun_sa_p4sa_token_creator" {
-  service_account_id = "projects/gcp-sa-aiplatform/serviceAccounts/${local.runtime_sa_email}"
-  role               = "roles/iam.serviceAccountTokenCreator"
-  member             = "serviceAccount:${google_project_service_identity.cloudrun_sa.email}"
+resource "google_service_account" "ae_runtime_sa" {
+  account_id   = "ae-runtime"
+  project      = var.tenant_project_id
+  display_name = "AE Cloud Run Runtime SA"
 }
 
-resource "google_service_account_iam_member" "cloudrun_sa_p4sa_user" {
-  service_account_id = "projects/gcp-sa-aiplatform/serviceAccounts/${local.runtime_sa_email}"
-  role               = "roles/iam.serviceAccountUser"
+resource "google_service_account_iam_member" "cloudrun_sa_runtime_token_creator" {
+  service_account_id = google_service_account.ae_runtime_sa.name
+  role               = "roles/iam.serviceAccountTokenCreator"
   member             = "serviceAccount:${google_project_service_identity.cloudrun_sa.email}"
+  depends_on         = [google_service_account.ae_runtime_sa]
 }
 
 resource "google_service_account" "memory_bank_sa" {
@@ -62,19 +59,18 @@ data "http" "prewarmed_init_dry_run" {
   request_headers = {
     Authorization = "Bearer ${data.google_client_config.current.access_token}"
     Content-Type  = "application/json"
-  }      
+  }
   request_body = jsonencode({
     ingress = "INGRESS_TRAFFIC_INTERNAL_ONLY"
     labels  = { "managed-by" = "reasoning-engine" }
     template = {
-      serviceAccount = local.runtime_sa_email
+      serviceAccount = google_service_account.ae_runtime_sa.email
       containers     = [{ image = "us-docker.pkg.dev/cloudrun/container/hello:latest" }]
     }
   })
   depends_on = [
     google_project_service_identity.cloudrun_sa,
-    google_service_account_iam_member.cloudrun_sa_p4sa_token_creator,
-    google_service_account_iam_member.cloudrun_sa_p4sa_user,
+    google_service_account_iam_member.cloudrun_sa_runtime_token_creator,
     google_service_account_iam_member.ae_cp_nonprod_token_creator,
     google_service_account_iam_member.ae_cp_prod_token_creator,
     google_project_iam_member.memory_bank_endpoints_editor,
