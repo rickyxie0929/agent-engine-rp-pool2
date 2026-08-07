@@ -32,7 +32,7 @@ resource "google_service_account" "memory_bank_sa" {
 
 resource "google_project_iam_member" "memory_bank_endpoints_editor" {
   project    = var.tenant_project_id
-  role       = "roles/aiplatform.endpoints.editor"
+  role       = "organizations/433637338589/roles/aiplatform_endpoints_editor"
   member     = "serviceAccount:${google_service_account.memory_bank_sa.email}"
   depends_on = [google_service_account.memory_bank_sa]
 }
